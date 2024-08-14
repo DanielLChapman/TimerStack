@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import TimerComponent from "./Timer/TimerComponent";
 import TimerAdd from "./Timer/TimerAdd";
+import { Draggable } from "react-drag-reorder";
 
 function TimerContainer() {
   const [originalTimers, setOriginalTimers] = useState([]);
@@ -8,6 +9,7 @@ function TimerContainer() {
   const [usedTimers, setUsedTimers] = useState([]);
   const [currentTimer, setCurrentTimer] = useState(null);
   const [isRunning, setIsRunning] = useState(false);
+  const [forceRender, setForceRender] = useState(0);
 
   let nextId = 0;
 
@@ -18,7 +20,6 @@ function TimerContainer() {
       setIsRunning(true);
       setCurrentTimer(nextTimer);
       setTimerStack(rest);
-      
     }
   };
 
@@ -40,10 +41,9 @@ function TimerContainer() {
       disabled: false,
     };
 
-    console.log(newTimer)
-
     setOriginalTimers((prevTimers) => [...prevTimers, newTimer]);
     setTimerStack((prevTimers) => [...prevTimers, newTimer]);
+    setForceRender((prev) => prev + 1);
   };
 
   const removeTimer = (id) => {
@@ -68,10 +68,9 @@ function TimerContainer() {
     }
   };
 
-  
   const onTimerComplete = (completedTimer) => {
     setUsedTimers((prevUsedTimers) => [...prevUsedTimers, completedTimer]);
-  
+
     if (timerStack.length > 0) {
       const [nextTimer, ...rest] = timerStack;
       console.log(nextTimer);
@@ -82,14 +81,34 @@ function TimerContainer() {
       setIsRunning(false); // Ensure that the timer stops running
     }
   };
-  
-
 
   useEffect(() => {
     if (currentTimer) {
       console.log("start counting down");
     }
   }, [currentTimer]);
+
+  const getChangedPos = (currentPos, newPos) => {
+    console.log(currentPos, newPos);
+    if (isRunning) {
+        alert("Can't reorder while its currently running");
+        return;
+    };
+
+    // Create a copy of the originalTimers array
+    let t = [...originalTimers];
+    
+    // Remove the element from the current position
+    let [movedItem] = t.splice(currentPos, 1);
+    
+    // Insert the element at the new position
+    t.splice(newPos, 0, movedItem);
+    
+    // Update the state with the new array
+    setOriginalTimers(t);
+    setTimerStack(t);
+};
+
 
   return (
     <div>
@@ -125,17 +144,36 @@ function TimerContainer() {
           </div>
         )}
         <h2>Upcoming Timers</h2>
-        {timerStack.map((timer, index) => (
-          <div key={timer.id} style={{ opacity: 1 }}>
-            <TimerComponent
-              index={index}
-              timer={timer}
-              isRunning={isRunning}
-              addTimer={addTimer}
-              removeTimer={removeTimer}
-            />
-          </div>
-        ))}
+        <div>
+          {isRunning ? "true" : "false"}
+          {isRunning ? (
+            timerStack.map((timer, index) => (
+              <div key={timer.id} style={{ opacity: 1 }}>
+                <TimerComponent
+                  index={index}
+                  timer={timer}
+                  isRunning={isRunning}
+                  addTimer={addTimer}
+                  removeTimer={removeTimer}
+                />
+              </div>
+            ))
+          ) : (
+            <Draggable key={forceRender} onPosChange={getChangedPos}>
+              {timerStack.map((timer, index) => (
+                <div key={timer.id} style={{ opacity: 1 }}>
+                  <TimerComponent
+                    index={index}
+                    timer={timer}
+                    isRunning={isRunning}
+                    addTimer={addTimer}
+                    removeTimer={removeTimer}
+                  />
+                </div>
+              ))}
+            </Draggable>
+          )}
+        </div>
       </div>
     </div>
   );
