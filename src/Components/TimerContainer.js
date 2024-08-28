@@ -11,7 +11,11 @@ function TimerContainer() {
   const [isRunning, setIsRunning] = useState(false);
   const [forceRender, setForceRender] = useState(0);
 
-  let nextId = 0;
+  const [utterance, setUtterance] = useState(null);
+  const [voice, setVoice] = useState(null);
+  const [pitch, setPitch] = useState(1);
+  const [rate, setRate] = useState(1);
+  const [volume, setVolume] = useState(1);
 
   const start = () => {
     reset();
@@ -20,15 +24,20 @@ function TimerContainer() {
       setIsRunning(true);
       setCurrentTimer(nextTimer);
       setTimerStack(rest);
+      setUtterance(nextTimer.name);
     }
   };
 
   const reset = () => {
     setIsRunning(false);
     setCurrentTimer(null);
-    setTimerStack([...originalTimers]);
     setUsedTimers([]);
+    setTimerStack([...originalTimers]);
+  
+    // Optionally force a re-render if the timers are not showing up
+    setForceRender((prev) => prev + 1);
   };
+  
 
   const addTimer = (name, days, hours, minutes, seconds) => {
     const newTimer = {
@@ -69,18 +78,36 @@ function TimerContainer() {
   };
 
   const onTimerComplete = (completedTimer) => {
+    // Move state updates out of the render phase
     setUsedTimers((prevUsedTimers) => [...prevUsedTimers, completedTimer]);
-
+    
     if (timerStack.length > 0) {
       const [nextTimer, ...rest] = timerStack;
-      console.log(nextTimer);
       setCurrentTimer(nextTimer);
       setTimerStack(rest);
+      setUtterance(nextTimer.name); // Trigger the next utterance when the timer changes
     } else {
       setCurrentTimer(null);
       setIsRunning(false); // Ensure that the timer stops running
     }
   };
+
+  useEffect(() => {
+    const loadVoices = () => {
+      const voices = window.speechSynthesis.getVoices();
+      if (voices.length > 0) {
+        setVoice(voices[0]); // Optionally, set the first voice as default
+      }
+    };
+  
+    // Load voices initially
+    loadVoices();
+  
+    // Add an event listener to load voices when they are available
+    window.speechSynthesis.onvoiceschanged = loadVoices;
+  }, []);
+  
+  
 
   useEffect(() => {
     if (currentTimer) {
@@ -89,29 +116,65 @@ function TimerContainer() {
   }, [currentTimer]);
 
   const getChangedPos = (currentPos, newPos) => {
-    console.log(currentPos, newPos);
     if (isRunning) {
-        alert("Can't reorder while its currently running");
-        return;
-    };
+      alert("Can't reorder while its currently running");
+      return;
+    }
 
     // Create a copy of the originalTimers array
     let t = [...originalTimers];
-    
+
     // Remove the element from the current position
     let [movedItem] = t.splice(currentPos, 1);
-    
+
     // Insert the element at the new position
     t.splice(newPos, 0, movedItem);
-    
+
     // Update the state with the new array
     setOriginalTimers(t);
     setTimerStack(t);
-};
+  };
 
+  const handleVoiceChange = (event) => {
+    const voices = window.speechSynthesis.getVoices();
+    setVoice(voices.find((v) => v.name === event.target.value));
+  };
+
+  useEffect(() => {
+    if (utterance !== null) {
+      const synth = window.speechSynthesis;
+      const u = new SpeechSynthesisUtterance(utterance);
+  
+      u.voice = voice;
+      u.pitch = pitch;
+      u.rate = rate;
+      u.volume = volume;
+      u.onend = () => {
+        setUtterance(null); // Only reset after speaking is complete
+      };
+      
+      synth.speak(u);
+    }
+  }, [utterance]);
+  
 
   return (
     <div>
+      <label className="block m-2 font-bold">
+        Voice
+        <select
+          className="block w-full p-2 text-slate-900 mt-1 rounded border-gray-300 focus:outline-none focus:shadow-outline-blue focus:border-blue-300"
+          value={voice?.name}
+          onChange={handleVoiceChange}
+        >
+          <option value="">Select a voice</option>
+          {window.speechSynthesis.getVoices().map((voice) => (
+            <option key={voice.name} value={voice.name}>
+              {voice.name}
+            </option>
+          ))}
+        </select>
+      </label>
       <button onClick={start}>Start Timers</button>
       <button onClick={reset}>Reset Timers</button>
       <TimerAdd addTimer={addTimer} />
